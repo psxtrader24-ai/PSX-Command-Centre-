@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0A0B0D;
+    color: #D1D5DB;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  
+  ::selection {
+    background-color: rgba(59, 130, 246, 0.3);
+    color: #FFFFFF;
+  }
+
+  /* Sleek institutional terminal scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0E1116;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1E2229;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2D333D;
+  }
+}
