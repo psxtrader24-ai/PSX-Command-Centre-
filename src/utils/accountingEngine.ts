@@ -12,6 +12,7 @@ import {
   EquityCurvePoint,
   DailyPnLEntry,
   TimeBasedPerformance,
+  PSXIndex,
 } from '../types';
 
 /**
@@ -74,6 +75,9 @@ export function calculateOpenPositions(
       const avgEntryPrice = totalCostBasis / totalRemainingQty;
       const quote = quotesMap[symbol];
       const currentPrice = quote ? quote.currentPrice : avgEntryPrice;
+      const previousClose = quote ? quote.previousClose : avgEntryPrice;
+      const dailyChange = quote ? quote.change : 0;
+      const dailyChangePercent = quote ? quote.changePercent : 0;
       const marketValue = totalRemainingQty * currentPrice;
       const unrealizedPnL = marketValue - totalCostBasis;
       const unrealizedPnLPercent = totalCostBasis > 0 ? (unrealizedPnL / totalCostBasis) * 100 : 0;
@@ -102,6 +106,9 @@ export function calculateOpenPositions(
         avgEntryPrice,
         costBasis: totalCostBasis,
         currentPrice,
+        previousClose,
+        dailyChange,
+        dailyChangePercent,
         marketValue,
         unrealizedPnL,
         unrealizedPnLPercent,
@@ -313,24 +320,45 @@ export function calculatePortfolioKPIs(
   arg2: OpenPosition[] | CashTransaction[],
   arg3: ClosedPosition[] | OpenPosition[],
   arg4?: Record<string, PSXQuote> | PSXQuote[] | ClosedPosition[],
-  arg5?: DailyPnLEntry[]
+  arg5?: DailyPnLEntry[] | Record<string, PSXQuote> | PSXQuote[],
+  arg6?: Record<string, PSXQuote> | PSXQuote[]
 ): PortfolioKPIs {
   let capitalFlow: CapitalFlow;
   let openPositions: OpenPosition[];
   let closedPositions: ClosedPosition[];
   let quotesMap: Record<string, PSXQuote> = {};
+  let dailyPnL: DailyPnLEntry[] = [];
 
   if (typeof arg1 === 'number') {
-    // Legacy invocation: (openingCapital, cashTransactions, openPositions, closedPositions, dailyPnL)
+    // Legacy invocation: (openingCapital, cashTransactions, openPositions, closedPositions, dailyPnL, quotes)
     openPositions = arg3 as OpenPosition[];
-    closedPositions = (arg4 || []) as ClosedPosition[];
+    closedPositions = (arg4 && Array.isArray(arg4) && arg4.length > 0 && 'netPnL' in arg4[0] ? arg4 : []) as ClosedPosition[];
     capitalFlow = calculateCapitalFlow(arg1, arg2 as CashTransaction[], openPositions, closedPositions);
+    if (Array.isArray(arg5) && arg5.length > 0 && 'dayOfWeek' in arg5[0]) {
+      dailyPnL = arg5 as DailyPnLEntry[];
+    }
+    const quotesSource = arg6 || (arg5 && !Array.isArray(arg5) ? arg5 : undefined) || (arg4 && !Array.isArray(arg4) ? arg4 : undefined);
+    if (quotesSource) {
+      if (Array.isArray(quotesSource)) {
+        quotesMap = quotesSource.reduce((acc, q) => ({ ...acc, [q.symbol]: q }), {});
+      } else {
+        quotesMap = quotesSource as Record<string, PSXQuote>;
+      }
+    }
   } else {
     capitalFlow = arg1;
     openPositions = arg2 as OpenPosition[];
     closedPositions = arg3 as ClosedPosition[];
-    if (arg4 && !Array.isArray(arg4)) {
-      quotesMap = arg4 as Record<string, PSXQuote>;
+    const quotesSource = arg4;
+    if (quotesSource) {
+      if (Array.isArray(quotesSource)) {
+        quotesMap = (quotesSource as PSXQuote[]).reduce((acc, q) => ({ ...acc, [q.symbol]: q }), {});
+      } else {
+        quotesMap = quotesSource as Record<string, PSXQuote>;
+      }
+    }
+    if (Array.isArray(arg5) && arg5.length > 0 && 'dayOfWeek' in arg5[0]) {
+      dailyPnL = arg5 as DailyPnLEntry[];
     }
   }
 
@@ -352,9 +380,13 @@ export function calculatePortfolioKPIs(
   const todayStr = new Date().toISOString().split('T')[0];
   let todayUnrealizedPnL = 0;
   for (const pos of openPositions) {
-    const q = quotesMap[pos.symbol];
-    if (q) {
-      todayUnrealizedPnL += pos.quantity * q.change;
+    if (pos.dailyChange !== undefined && pos.dailyChange !== 0) {
+      todayUnrealizedPnL += pos.quantity * pos.dailyChange;
+    } else {
+      const q = quotesMap[pos.symbol];
+      if (q) {
+        todayUnrealizedPnL += pos.quantity * q.change;
+      }
     }
   }
 
@@ -365,7 +397,13 @@ export function calculatePortfolioKPIs(
     }
   }
 
-  const todayPnL = todayUnrealizedPnL + todayRealizedPnL;
+  let todayPnL = todayUnrealizedPnL + todayRealizedPnL;
+  // If market is closed or outside live trading session, use latest daily P&L entry as reference
+  if (todayPnL === 0 && dailyPnL.length > 0) {
+    const latestDaily = dailyPnL[dailyPnL.length - 1];
+    todayPnL = latestDaily.pnl;
+  }
+
   const yesterdayPortfolioValue = portfolioValue - todayPnL;
   const todayPnLPercent = yesterdayPortfolioValue > 0 ? (todayPnL / yesterdayPortfolioValue) * 100 : 0;
 
@@ -589,16 +627,21 @@ export function calculateTimeBasedPerformance(
   trades: Trade[],
   cashTransactions: CashTransaction[],
   openingCapital: number,
-  historicalEquity: EquityCurvePoint[]
+  historicalEquity: EquityCurvePoint[],
+  indices?: PSXIndex[]
 ): TimeBasedPerformance[] {
   const closedTrades = calculateClosedTrades(trades);
   const now = new Date();
+  const kse100 = indices?.find((i) => i.symbol === 'KSE-100');
+  const kseHistorical = kse100?.historical || [];
+  const currentKSE = kse100?.value || 81452.80;
+
   const periods = [
-    { label: 'Past 7 Days', days: 7 },
-    { label: 'Past 30 Days', days: 30 },
-    { label: 'Past 90 Days', days: 90 },
-    { label: 'YTD 2024', days: 250 },
-    { label: 'All Time', days: 9999 },
+    { label: 'Weekly (Past 7 Days)', days: 7, kseBase: 80890.00 },
+    { label: 'Monthly (Past 30 Days)', days: 30, kseBase: 77800.00 },
+    { label: 'Quarterly (Past 90 Days)', days: 90, kseBase: 75070.00 },
+    { label: 'Yearly (YTD 2026)', days: 250, kseBase: 70500.00 },
+    { label: 'Since Inception (All Time)', days: 9999, kseBase: kseHistorical[0]?.close ?? 74180.00 },
   ];
 
   return periods.map((p) => {
@@ -615,7 +658,20 @@ export function calculateTimeBasedPerformance(
     const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 99.9 : 0;
     const startingEquity = openingCapital;
     const endingEquity = startingEquity + netTradingPnL;
-    const returnPercent = startingEquity > 0 ? (netTradingPnL / startingEquity) * 100 : 0;
+    const returnPercent = startingEquity > 0 ? Number(((netTradingPnL / startingEquity) * 100).toFixed(2)) : 0;
+
+    // Benchmark return computation
+    let benchmarkReturnPercent = 0;
+    if (kseHistorical.length > 0) {
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      const matchPoint = kseHistorical.find((h) => h.date >= cutoffStr) || kseHistorical[0];
+      const baseClose = matchPoint ? matchPoint.close : p.kseBase;
+      benchmarkReturnPercent = Number((((currentKSE - baseClose) / baseClose) * 100).toFixed(2));
+    } else {
+      benchmarkReturnPercent = Number((((currentKSE - p.kseBase) / p.kseBase) * 100).toFixed(2));
+    }
+
+    const outperformancePercent = Number((returnPercent - benchmarkReturnPercent).toFixed(2));
 
     return {
       period: p.label,
@@ -629,6 +685,8 @@ export function calculateTimeBasedPerformance(
       winRate,
       tradesCount: pTrades.length,
       profitFactor,
+      benchmarkReturnPercent,
+      outperformancePercent,
     };
   });
 }

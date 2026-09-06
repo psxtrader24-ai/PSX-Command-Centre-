@@ -1,6 +1,6 @@
 {
-  "name": "PSX Portfolio Command Center",
-  "description": "Institutional portfolio tracking, trade accounting, risk analytics, and performance terminal for Pakistan Stock Exchange (PSX) traders.",
+  "name": "METRICLY",
+  "description": "Simplify Math. Multiply Gains. Institutional portfolio tracking, trade accounting, risk analytics, and performance terminal for Pakistan Stock Exchange (PSX) traders.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

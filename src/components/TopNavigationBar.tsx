@@ -12,11 +12,12 @@ import {
   Layers,
   ShieldAlert,
 } from 'lucide-react';
-import { formatPKR, formatPercent } from '../utils/formatters';
-import { PortfolioKPIs, DataBasisType } from '../types';
+import { formatPKR, formatPercent, formatNumber } from '../utils/formatters';
+import { PortfolioKPIs, DataBasisType, PSXIndex } from '../types';
 
 interface TopNavigationBarProps {
   kpis: PortfolioKPIs;
+  benchmarkIndex?: PSXIndex;
   marketStatus: {
     isOpen: boolean;
     status: 'OPEN' | 'CLOSED';
@@ -39,6 +40,7 @@ interface TopNavigationBarProps {
 
 export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   kpis,
+  benchmarkIndex,
   marketStatus,
   dataBasis,
   lastSync,
@@ -75,15 +77,27 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
       {/* Upper Terminal Bar */}
       <div className="flex h-12 items-center justify-between px-4 border-b border-[#1E2229] gap-4">
         {/* Left: Terminal Identity & PSX Market Status */}
-        <div className="flex items-center space-x-4 shrink-0">
-          <div className="flex items-center space-x-2">
-            <div className="h-6 w-1 bg-blue-500 rounded-xs"></div>
-            <span className="text-sm font-bold tracking-tight text-white uppercase font-mono">
-              PSX Terminal <span className="text-blue-500 font-light italic">v4.2</span>
-            </span>
+        <div className="flex items-center space-x-3 sm:space-x-4 shrink-0">
+          <div className="flex items-center space-x-2.5">
+            <div className="h-7 w-7 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs tracking-tighter shadow-sm">
+              <span className="font-mono">M</span>
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-sm sm:text-base font-black tracking-wider text-white uppercase font-mono">
+                  METRICLY
+                </span>
+                <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 uppercase tracking-widest font-mono hidden xs:inline-block">
+                  PRO
+                </span>
+              </div>
+              <span className="text-[9px] text-gray-400 font-mono tracking-tight hidden sm:block whitespace-nowrap">
+                Simplify Math. Multiply Gains.
+              </span>
+            </div>
           </div>
 
-          <div className="h-4 w-[1px] bg-[#2D333D]"></div>
+          <div className="h-5 w-[1px] bg-[#2D333D]"></div>
 
           {/* Market Status Pill & Ticker Info */}
           <div className="flex items-center space-x-3 text-[10px] font-medium uppercase tracking-wider font-mono">
@@ -100,8 +114,12 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
               <span>KSE-100 {marketStatus.status}</span>
             </span>
 
-            <span className="text-gray-400 hidden sm:inline">
-              72,580.12 <span className="text-emerald-500 font-semibold">+0.42%</span>
+            <span className="text-gray-300 hidden sm:inline font-mono">
+              {benchmarkIndex ? formatNumber(benchmarkIndex.value, 2) : '81,452.80'}{' '}
+              <span className={`font-semibold ${(benchmarkIndex?.change ?? 412.35) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {(benchmarkIndex?.change ?? 412.35) >= 0 ? '+' : ''}
+                {(benchmarkIndex?.changePercent ?? 0.51).toFixed(2)}%
+              </span>
             </span>
 
             <span className="text-gray-600 hidden md:inline">|</span>
@@ -109,9 +127,12 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
             <span
               id="psx-data-freshness-badge"
               title={`Data Basis: ${dataBasis} (Last sync: ${new Date(lastSync).toLocaleTimeString()})`}
-              className="text-gray-500 uppercase hidden md:inline"
+              className="text-gray-400 uppercase hidden md:inline font-mono text-[9px]"
             >
-              Data Refresh: {marketStatus.serverTimePKT}
+              <span className="text-gray-500">Basis:</span>{' '}
+              <span className={`font-semibold ${dataBasis === 'LATEST_CLOSE' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                {dataBasis === 'LATEST_CLOSE' ? 'Official Close' : dataBasis}
+              </span>
             </span>
           </div>
         </div>

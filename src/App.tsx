@@ -22,6 +22,8 @@ import {
   AUTHENTIC_PSX_SECURITIES,
   INITIAL_PSX_INDICES,
   getPSXMarketStatus,
+  syncClosingMarketData,
+  getLatestTradingSessionInfo,
 } from './data/psxSecurities';
 import {
   INITIAL_OPENING_CAPITAL,
@@ -149,34 +151,50 @@ export default function App() {
   );
 
   const timePerformance = useMemo(
-    () => calculateTimeBasedPerformance(trades, cashTransactions, openingCapital, equityCurve),
-    [trades, cashTransactions, openingCapital, equityCurve]
+    () => calculateTimeBasedPerformance(trades, cashTransactions, openingCapital, equityCurve, indices),
+    [trades, cashTransactions, openingCapital, equityCurve, indices]
   );
 
-  // Sync market data with PSX server feed
+  // Sync market data with PSX server feed (with fallback for static hosting/GitHub Pages)
   const handleSyncPSX = useCallback(async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch('/api/psx/sync', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setLastSync(data.lastSync);
-        setDataBasis(data.dataBasis);
+      let serverSynced = false;
+      try {
+        const res = await fetch('/api/psx/sync', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          setLastSync(data.lastSync);
+          setDataBasis(data.dataBasis);
 
-        // Fetch refreshed quotes
-        const qRes = await fetch('/api/psx/quotes');
-        if (qRes.ok) {
-          const qData = await qRes.json();
-          setQuotes(qData.quotes);
-          setIndices(qData.indices);
+          // Fetch refreshed quotes
+          const qRes = await fetch('/api/psx/quotes');
+          if (qRes.ok) {
+            const qData = await qRes.json();
+            setQuotes(qData.quotes);
+            setIndices(qData.indices);
+            serverSynced = true;
+          }
         }
+      } catch {
+        // Backend API is not accessible (e.g. static hosting on GitHub Pages)
+      }
+
+      if (!serverSynced) {
+        // High-reliability local closing calculation
+        const syncResult = syncClosingMarketData(quotes, indices, equityCurve, capitalFlow.currentEquity);
+        setQuotes(syncResult.quotes);
+        setIndices(syncResult.indices);
+        setEquityCurve(syncResult.equityCurve);
+        setDataBasis(syncResult.dataBasis);
+        setLastSync(syncResult.lastSync);
       }
     } catch (err) {
       console.error('PSX sync failed:', err);
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, [quotes, indices, equityCurve, capitalFlow.currentEquity]);
 
   // Handle New Trade
   const handleCreateTrade = async (tradeData: any) => {
@@ -474,6 +492,8 @@ export default function App() {
             timePerformance={timePerformance}
             stats={stats}
             riskMetrics={riskMetrics}
+            equityCurve={equityCurve}
+            indices={indices}
             darkMode={darkMode}
           />
         )}

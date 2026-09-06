@@ -86,6 +86,9 @@ export interface OpenPosition {
   avgEntryPrice: number;
   costBasis: number; // quantity * avgEntryPrice + associated entry fees
   currentPrice: number;
+  previousClose?: number;
+  dailyChange?: number;
+  dailyChangePercent?: number;
   marketValue: number; // quantity * currentPrice
   unrealizedPnL: number; // marketValue - costBasis
   unrealizedPnLPercent: number;
@@ -310,5 +313,23 @@ export interface TimeBasedPerformance {
   winRate: number;
   tradesCount: number;
   profitFactor: number;
+  benchmarkReturnPercent?: number;
+  outperformancePercent?: number;
+}
+
+export interface BenchmarkComparisonSummary {
+  timeframe: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'INCEPTION';
+  label: string;
+  portfolioReturnPercent: number;
+  benchmarkReturnPercent: number;
+  outperformancePercent: number;
+  isOutperforming: boolean;
+  benchmarkSymbol: string;
+  benchmarkClose: number;
+  benchmarkChangePercent: number;
+  alpha: number;
+  beta: number;
+  sharpeRatio: number;
+  maxDrawdownPercent: number;
 }
 

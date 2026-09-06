@@ -183,11 +183,22 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 tickFormatter={(val) => formatDate(val)}
               />
               <YAxis
+                yAxisId="left"
                 stroke="#6B7280"
                 fontSize={10}
-                tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`}
+                tickFormatter={(v) => `${(v / 1000000).toFixed(2)}M`}
                 domain={['auto', 'auto']}
               />
+              {showBenchmark && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#F59E0B"
+                  fontSize={10}
+                  tickFormatter={(v) => `${v}%`}
+                  domain={['auto', 'auto']}
+                />
+              )}
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#11141A',
@@ -199,13 +210,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 formatter={(val: any, name: any) => {
                   if (name === 'Portfolio Equity') return [formatPKR(Number(val)), name];
                   if (name === 'Net Deposits') return [formatPKR(Number(val)), name];
-                  if (name === 'KSE-100 Benchmark %') return [formatPercent(Number(val)), name];
+                  if (name === 'KSE-100 Benchmark %' || name === 'KSE-100 Return %') return [formatPercent(Number(val)), name];
                   return [val, name];
                 }}
                 labelFormatter={(label) => `Date: ${formatDate(String(label))}`}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               <Line
+                yAxisId="left"
                 type="monotone"
                 dataKey="portfolioEquity"
                 name="Portfolio Equity"
@@ -215,6 +227,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 activeDot={{ r: 5 }}
               />
               <Line
+                yAxisId="left"
                 type="stepAfter"
                 dataKey="netDeposits"
                 name="Net Deposits"
@@ -225,12 +238,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               />
               {showBenchmark && (
                 <Line
+                  yAxisId="right"
                   type="monotone"
                   dataKey="benchmarkReturnPercent"
-                  name="KSE-100 Benchmark %"
+                  name="KSE-100 Return %"
                   stroke="#F59E0B"
-                  strokeWidth={1.5}
-                  dot={false}
+                  strokeWidth={2}
+                  dot={{ r: 2.5, fill: '#F59E0B' }}
                 />
               )}
             </LineChart>

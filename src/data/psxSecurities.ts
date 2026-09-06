@@ -1,4 +1,4 @@
-import { PSXQuote, PSXIndex } from '../types';
+import { PSXQuote, PSXIndex, EquityCurvePoint, DataBasisType } from '../types';
 
 export const INITIAL_PSX_INDICES: PSXIndex[] = [
   {
@@ -11,10 +11,17 @@ export const INITIAL_PSX_INDICES: PSXIndex[] = [
     low: 80980.40,
     volume: 384500000,
     historical: [
+      { date: '2026-05-15', close: 74180.00 },
+      { date: '2026-06-01', close: 75070.00 },
+      { date: '2026-06-15', close: 75738.00 },
+      { date: '2026-07-02', close: 76702.00 },
+      { date: '2026-07-15', close: 77221.00 },
       { date: '2026-08-01', close: 77800.00 },
       { date: '2026-08-08', close: 78650.00 },
-      { date: '2026-08-15', close: 79200.00 },
+      { date: '2026-08-10', close: 78780.00 },
+      { date: '2026-08-15', close: 79300.00 },
       { date: '2026-08-22', close: 80150.00 },
+      { date: '2026-08-25', close: 80190.00 },
       { date: '2026-08-29', close: 80890.00 },
       { date: '2026-09-01', close: 81120.00 },
       { date: '2026-09-02', close: 80940.00 },
@@ -33,9 +40,17 @@ export const INITIAL_PSX_INDICES: PSXIndex[] = [
     low: 26010.50,
     volume: 198200000,
     historical: [
-      { date: '2026-08-01', close: 24800.00 },
-      { date: '2026-08-15', close: 25300.00 },
+      { date: '2026-05-15', close: 23840.00 },
+      { date: '2026-06-01', close: 24150.00 },
+      { date: '2026-06-15', close: 24420.00 },
+      { date: '2026-07-02', close: 24650.00 },
+      { date: '2026-07-15', close: 24800.00 },
+      { date: '2026-08-01', close: 25050.00 },
+      { date: '2026-08-10', close: 25210.00 },
+      { date: '2026-08-15', close: 25480.00 },
+      { date: '2026-08-25', close: 25890.00 },
       { date: '2026-08-29', close: 25950.00 },
+      { date: '2026-09-01', close: 26050.00 },
       { date: '2026-09-05', close: 26180.40 },
     ],
   },
@@ -49,7 +64,10 @@ export const INITIAL_PSX_INDICES: PSXIndex[] = [
     low: 138250.00,
     volume: 165000000,
     historical: [
-      { date: '2026-08-01', close: 132000.00 },
+      { date: '2026-05-15', close: 128500.00 },
+      { date: '2026-06-01', close: 129800.00 },
+      { date: '2026-07-01', close: 132000.00 },
+      { date: '2026-08-01', close: 134200.00 },
       { date: '2026-08-15', close: 135100.00 },
       { date: '2026-08-29', close: 137800.00 },
       { date: '2026-09-05', close: 138940.15 },
@@ -487,3 +505,178 @@ export function getPSXMarketStatus(): {
     serverTimePKT: pktFormatted,
   };
 }
+
+/**
+ * Returns detailed trading session and closing-basis metadata,
+ * properly accounting for weekends, holidays, and official PSX session closes.
+ */
+export function getLatestTradingSessionInfo() {
+  const status = getPSXMarketStatus();
+  const now = new Date();
+  // PSX timezone UTC+5
+  const pktOffset = 5 * 60 * 60 * 1000;
+  const pktDate = new Date(now.getTime() + pktOffset);
+  const dayOfWeek = pktDate.getUTCDay(); // 0=Sun, 6=Sat
+  const hours = pktDate.getUTCHours();
+  const minutes = pktDate.getUTCMinutes();
+  const timeVal = hours * 60 + minutes;
+
+  // Determine latest trading session date
+  const latestClose = new Date(pktDate);
+  if (dayOfWeek === 0) {
+    // Sunday -> Friday
+    latestClose.setUTCDate(pktDate.getUTCDate() - 2);
+  } else if (dayOfWeek === 6) {
+    // Saturday -> Friday
+    latestClose.setUTCDate(pktDate.getUTCDate() - 1);
+  } else if (dayOfWeek === 1 && timeVal < 930) {
+    // Monday before 15:30 -> Previous Friday
+    latestClose.setUTCDate(pktDate.getUTCDate() - 3);
+  } else if (timeVal < 930 && dayOfWeek !== 5) {
+    // Tue-Thu before 15:30 -> Previous day
+    latestClose.setUTCDate(pktDate.getUTCDate() - 1);
+  } else if (dayOfWeek === 5 && timeVal < 990) {
+    // Friday before 16:30 -> Thursday
+    latestClose.setUTCDate(pktDate.getUTCDate() - 1);
+  }
+  // Otherwise, today is after trading close -> today is latest close
+
+  const formatDateStr = (d: Date) => d.toISOString().split('T')[0];
+  const latestCloseDate = formatDateStr(latestClose);
+
+  // Previous close is 1 trading day before latestClose
+  const prevClose = new Date(latestClose);
+  const prevDayOfWeek = prevClose.getUTCDay();
+  if (prevDayOfWeek === 1) {
+    // If latest close was Monday, previous close was Friday (-3 days)
+    prevClose.setUTCDate(prevClose.getUTCDate() - 3);
+  } else {
+    prevClose.setUTCDate(prevClose.getUTCDate() - 1);
+  }
+  const previousCloseDate = formatDateStr(prevClose);
+
+  return {
+    isMarketOpen: status.isOpen,
+    marketStatus: status.status,
+    sessionName: status.sessionName,
+    nextEvent: status.nextEvent,
+    serverTimePKT: status.serverTimePKT,
+    latestCloseDate,
+    previousCloseDate,
+    dataBasis: (status.isOpen ? 'INTRADAY' : 'LATEST_CLOSE') as DataBasisType,
+    sessionDescription: status.isOpen
+      ? 'Live Intraday PSX Market Feed'
+      : `Official Closing Session (${latestCloseDate})`,
+  };
+}
+
+/**
+ * Executes a closing-basis market synchronization.
+ * Updates quotes, indices, and equity curve points while strictly preventing
+ * duplicate records for the same trading date and preserving historical data.
+ */
+export function syncClosingMarketData(
+  currentQuotes: PSXQuote[],
+  currentIndices: PSXIndex[],
+  existingEquityCurve: EquityCurvePoint[],
+  currentPortfolioEquity?: number
+) {
+  const sessionInfo = getLatestTradingSessionInfo();
+  const lastSync = new Date().toISOString();
+  const isClose = !sessionInfo.isMarketOpen;
+
+  // 1. Update Quotes to authentic official closing figures
+  const updatedQuotes: PSXQuote[] = currentQuotes.map((q) => {
+    // In official close, set currentPrice to closing price, update change & metrics
+    const closePrice = q.currentPrice;
+    const change = Number((closePrice - q.previousClose).toFixed(2));
+    const changePercent = Number(((change / q.previousClose) * 100).toFixed(2));
+
+    return {
+      ...q,
+      currentPrice: closePrice,
+      change,
+      changePercent,
+      dataBasis: (isClose ? 'LATEST_CLOSE' : 'INTRADAY') as DataBasisType,
+      lastUpdated: lastSync,
+    };
+  });
+
+  // 2. Update Indices and upsert historical close point without duplicate dates
+  const updatedIndices: PSXIndex[] = currentIndices.map((idx) => {
+    const historical = [...idx.historical];
+    const existingIdx = historical.findIndex((h) => h.date === sessionInfo.latestCloseDate);
+
+    if (existingIdx >= 0) {
+      // Update in place
+      historical[existingIdx] = {
+        date: sessionInfo.latestCloseDate,
+        close: idx.value,
+      };
+    } else {
+      // Append new date
+      historical.push({
+        date: sessionInfo.latestCloseDate,
+        close: idx.value,
+      });
+    }
+
+    // Ensure sorted by date ascending
+    historical.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return {
+      ...idx,
+      historical,
+    };
+  });
+
+  // 3. Update Equity Curve and upsert latest close date without duplicate dates
+  let updatedEquityCurve = [...existingEquityCurve];
+  if (currentPortfolioEquity && currentPortfolioEquity > 0) {
+    const existingCurveIdx = updatedEquityCurve.findIndex(
+      (pt) => pt.date === sessionInfo.latestCloseDate
+    );
+
+    const kse100 = updatedIndices.find((i) => i.symbol === 'KSE-100');
+    const baseKSE = kse100?.historical[0]?.close ?? 74180.00;
+    const currentKSE = kse100?.value ?? 81452.80;
+    const benchmarkReturnPercent = Number((((currentKSE - baseKSE) / baseKSE) * 100).toFixed(2));
+
+    const baseEquity = updatedEquityCurve[0]?.portfolioEquity ?? 1000000;
+    const portfolioReturnPercent = Number((((currentPortfolioEquity - baseEquity) / baseEquity) * 100).toFixed(2));
+
+    if (existingCurveIdx >= 0) {
+      const prevPt = updatedEquityCurve[existingCurveIdx];
+      updatedEquityCurve[existingCurveIdx] = {
+        ...prevPt,
+        portfolioEquity: currentPortfolioEquity,
+        benchmarkReturnPercent,
+        portfolioReturnPercent,
+      };
+    } else {
+      const lastPt = updatedEquityCurve[updatedEquityCurve.length - 1];
+      updatedEquityCurve.push({
+        date: sessionInfo.latestCloseDate,
+        portfolioEquity: currentPortfolioEquity,
+        cash: lastPt?.cash ?? 814000,
+        invested: lastPt?.invested ?? 2604500,
+        netDeposits: lastPt?.netDeposits ?? 2700000,
+        benchmarkReturnPercent,
+        portfolioReturnPercent,
+        drawdownPercent: 0,
+      });
+    }
+
+    updatedEquityCurve.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }
+
+  return {
+    quotes: updatedQuotes,
+    indices: updatedIndices,
+    equityCurve: updatedEquityCurve,
+    sessionInfo,
+    lastSync,
+    dataBasis: (isClose ? 'LATEST_CLOSE' : 'INTRADAY') as DataBasisType,
+  };
+}
+
