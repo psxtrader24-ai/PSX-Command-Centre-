@@ -161,6 +161,7 @@ export function calculateClosedTrades(trades: Trade[]): ClosedPosition[] {
 
       closedPositions.push({
         id: trade.id,
+        tradeId: trade.id,
         symbol: trade.symbol,
         companyName: trade.companyName,
         sector: trade.sector,
@@ -172,10 +173,12 @@ export function calculateClosedTrades(trades: Trade[]): ClosedPosition[] {
         grossPnL,
         fees: trade.fees,
         taxes: trade.taxes,
+        feesAndTaxes: totalFees,
         netPnL,
         returnPercent,
         holdingPeriodDays: holdingDays,
         winLoss,
+        isWin: winLoss === 'WIN',
         strategy: trade.strategy,
         exitReason: trade.exitReason || 'Target reached',
         stopLoss: trade.stopLoss,
@@ -212,6 +215,7 @@ export function calculateClosedTrades(trades: Trade[]): ClosedPosition[] {
 
         closedPositions.push({
           id: `${trade.id}_PE_${idx + 1}`,
+          tradeId: trade.id,
           symbol: trade.symbol,
           companyName: trade.companyName,
           sector: trade.sector,
@@ -223,10 +227,12 @@ export function calculateClosedTrades(trades: Trade[]): ClosedPosition[] {
           grossPnL,
           fees: pe.fees,
           taxes: 0,
+          feesAndTaxes: pe.fees,
           netPnL,
           returnPercent,
           holdingPeriodDays: holdingDays,
           winLoss,
+          isWin: winLoss === 'WIN',
           strategy: trade.strategy,
           exitReason: pe.exitReason || 'Partial Exit / Scale out',
           stopLoss: trade.stopLoss,

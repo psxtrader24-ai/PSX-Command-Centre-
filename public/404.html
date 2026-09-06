@@ -4,18 +4,20 @@
     <meta charset="utf-8">
     <title>METRICLY | PSX Command Centre</title>
     <script type="text/javascript">
-      // GitHub Pages SPA redirect: Redirects 404 paths to index.html with the query path
-      var pathSegmentsToKeep = 1;
-      var l = window.location;
-      l.replace(
-        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
-        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-        l.hash
+      // GitHub Pages SPA redirect: Redirects 404 paths to index.html with query parameter
+      var loc = window.location;
+      // Determine if repository name is in path
+      var isGithubPagesRepo = loc.hostname.endsWith('.github.io') && loc.pathname.split('/').filter(Boolean).length >= 1;
+      var repoSegment = isGithubPagesRepo ? '/' + loc.pathname.split('/').filter(Boolean)[0] : '';
+      var subPath = loc.pathname.slice(repoSegment.length);
+
+      loc.replace(
+        loc.origin + repoSegment + '/?p=' +
+        encodeURIComponent(subPath + (loc.search ? loc.search : '') + (loc.hash ? loc.hash : ''))
       );
     </script>
   </head>
-  <body>
+  <body style="background:#0b0e14;color:#94a3b8;font-family:monospace;padding:20px;">
+    Redirecting to METRICLY PSX Command Centre...
   </body>
 </html>

@@ -9,9 +9,37 @@
     <meta property="og:description" content="Simplify Math. Multiply Gains. Institutional portfolio tracking, trade accounting, risk analytics, and performance terminal for Pakistan Stock Exchange (PSX) traders." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script type="text/javascript">
+      // GitHub Pages relative base path fix:
+      // If visited without a trailing slash (e.g. https://username.github.io/repo),
+      // relative asset links like "./assets/index.js" resolve to "https://username.github.io/assets/index.js" (404).
+      // Enforcing a trailing slash guarantees correct relative path resolution.
+      (function() {
+        var loc = window.location;
+        if (loc.pathname && !loc.pathname.endsWith('/') && !loc.pathname.split('/').pop().includes('.')) {
+          window.location.replace(loc.origin + loc.pathname + '/' + loc.search + loc.hash);
+        }
+      })();
+
+      // GitHub Pages SPA deep link restoration
+      (function() {
+        var params = new URLSearchParams(window.location.search);
+        var redirect = params.get('p');
+        if (redirect) {
+          var cleanPath = decodeURIComponent(redirect);
+          window.history.replaceState(null, '', cleanPath);
+        }
+      })();
+    </script>
   </head>
-  <body>
-    <div id="root"></div>
+  <body class="bg-[#0b0e14] text-slate-100 min-h-screen">
+    <div id="root">
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0b0e14;color:#94a3b8;font-family:monospace;font-size:13px;flex-direction:column;gap:12px;">
+        <div style="width:28px;height:28px;border:2px solid #3b82f6;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <div>METRICLY PSX TERMINAL // Initializing...</div>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

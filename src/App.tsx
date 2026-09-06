@@ -55,6 +55,17 @@ import {
   MarketStatusInfo,
 } from './types';
 
+// Helper for reading localStorage safely
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
 export default function App() {
   // Theme state: dark terminal mode by default
   const [darkMode, setDarkMode] = useState<boolean>(true);
@@ -62,16 +73,81 @@ export default function App() {
   // Active view navigation
   const [activeView, setActiveView] = useState<string>('overview');
 
-  // Single Source of Truth Portfolio State
-  const [openingCapital, setOpeningCapital] = useState<number>(INITIAL_OPENING_CAPITAL);
-  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>(INITIAL_CASH_TRANSACTIONS);
-  const [trades, setTrades] = useState<Trade[]>(INITIAL_TRADES);
-  const [journals, setJournals] = useState<TradeJournalEntry[]>(INITIAL_TRADE_JOURNALS);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOG);
-  const [quotes, setQuotes] = useState<PSXQuote[]>(AUTHENTIC_PSX_SECURITIES);
-  const [indices, setIndices] = useState<PSXIndex[]>(INITIAL_PSX_INDICES);
-  const [equityCurve, setEquityCurve] = useState(INITIAL_EQUITY_CURVE);
+  // Single Source of Truth Portfolio State with localStorage persistence
+  const [openingCapital, setOpeningCapital] = useState<number>(() =>
+    loadFromStorage('metricly_capital', INITIAL_OPENING_CAPITAL)
+  );
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>(() =>
+    loadFromStorage('metricly_cash', INITIAL_CASH_TRANSACTIONS)
+  );
+  const [trades, setTrades] = useState<Trade[]>(() =>
+    loadFromStorage('metricly_trades', INITIAL_TRADES)
+  );
+  const [journals, setJournals] = useState<TradeJournalEntry[]>(() =>
+    loadFromStorage('metricly_journals', INITIAL_TRADE_JOURNALS)
+  );
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() =>
+    loadFromStorage('metricly_audit_logs', INITIAL_AUDIT_LOG)
+  );
+  const [quotes, setQuotes] = useState<PSXQuote[]>(() =>
+    loadFromStorage('metricly_quotes', AUTHENTIC_PSX_SECURITIES)
+  );
+  const [indices, setIndices] = useState<PSXIndex[]>(() =>
+    loadFromStorage('metricly_indices', INITIAL_PSX_INDICES)
+  );
+  const [equityCurve, setEquityCurve] = useState(() =>
+    loadFromStorage('metricly_equity_curve', INITIAL_EQUITY_CURVE)
+  );
   const [dailyPnL, setDailyPnL] = useState(INITIAL_DAILY_PNL_CALENDAR);
+
+  // Persist state to localStorage for static GitHub Pages hosting
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_trades', JSON.stringify(trades));
+    } catch {}
+  }, [trades]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_cash', JSON.stringify(cashTransactions));
+    } catch {}
+  }, [cashTransactions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_capital', JSON.stringify(openingCapital));
+    } catch {}
+  }, [openingCapital]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_journals', JSON.stringify(journals));
+    } catch {}
+  }, [journals]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_audit_logs', JSON.stringify(auditLogs));
+    } catch {}
+  }, [auditLogs]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_quotes', JSON.stringify(quotes));
+    } catch {}
+  }, [quotes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_indices', JSON.stringify(indices));
+    } catch {}
+  }, [indices]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metricly_equity_curve', JSON.stringify(equityCurve));
+    } catch {}
+  }, [equityCurve]);
 
   // PSX Market Feed metadata
   const [marketStatus, setMarketStatus] = useState<MarketStatusInfo>(getPSXMarketStatus());
@@ -95,25 +171,28 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch initial state from server backend
+  // Fetch initial state from server backend if present (handles static hosts safely)
   useEffect(() => {
     async function loadPortfolio() {
       try {
         const res = await fetch('/api/portfolio');
         if (res.ok) {
-          const data = await res.json();
-          if (data.trades) setTrades(data.trades);
-          if (data.cashTransactions) setCashTransactions(data.cashTransactions);
-          if (data.openingCapital) setOpeningCapital(data.openingCapital);
-          if (data.journals) setJournals(data.journals);
-          if (data.auditLogs) setAuditLogs(data.auditLogs);
-          if (data.quotes) setQuotes(data.quotes);
-          if (data.indices) setIndices(data.indices);
-          if (data.lastDataSync) setLastSync(data.lastDataSync);
-          if (data.dataBasis) setDataBasis(data.dataBasis);
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.trades) setTrades(data.trades);
+            if (data.cashTransactions) setCashTransactions(data.cashTransactions);
+            if (data.openingCapital) setOpeningCapital(data.openingCapital);
+            if (data.journals) setJournals(data.journals);
+            if (data.auditLogs) setAuditLogs(data.auditLogs);
+            if (data.quotes) setQuotes(data.quotes);
+            if (data.indices) setIndices(data.indices);
+            if (data.lastDataSync) setLastSync(data.lastDataSync);
+            if (data.dataBasis) setDataBasis(data.dataBasis);
+          }
         }
-      } catch (err) {
-        // Fallback to local state if server is still starting
+      } catch {
+        // Static hosting mode (GitHub Pages) or offline
       }
     }
     loadPortfolio();
@@ -198,6 +277,7 @@ export default function App() {
 
   // Handle New Trade
   const handleCreateTrade = async (tradeData: any) => {
+    let created: Trade | null = null;
     try {
       const res = await fetch('/api/trades', {
         method: 'POST',
@@ -206,25 +286,40 @@ export default function App() {
       });
 
       if (res.ok) {
-        const created = await res.json();
-        setTrades((prev) => [created, ...prev]);
-
-        // Add to audit log
-        const auditEntry: AuditLogEntry = {
-          id: `AUD-${Date.now().toString(36).toUpperCase()}`,
-          timestamp: new Date().toISOString(),
-          user: 'psxtrader24@gmail.com',
-          action: 'CREATE',
-          entity: 'TRADE',
-          entityId: created.id,
-          summary: `${created.type} ${created.quantity} ${created.symbol} @ Rs ${created.entryPrice}`,
-          newValue: created,
-        };
-        setAuditLogs((prev) => [auditEntry, ...prev]);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          created = await res.json();
+        }
       }
-    } catch (err) {
-      console.error('Failed to create trade:', err);
+    } catch {
+      // Backend unavailable on static GitHub Pages
     }
+
+    if (!created) {
+      created = {
+        ...tradeData,
+        id: `TRD-${Date.now().toString(36).toUpperCase()}`,
+        status: 'OPEN',
+        remainingQuantity: tradeData.quantity,
+        partialExits: [],
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    setTrades((prev) => [created!, ...prev]);
+
+    // Add to audit log
+    const auditEntry: AuditLogEntry = {
+      id: `AUD-${Date.now().toString(36).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      user: 'psxtrader24@gmail.com',
+      action: 'CREATE',
+      entity: 'TRADE',
+      entityId: created.id,
+      summary: `${created.type} ${created.quantity} ${created.symbol} @ Rs ${created.entryPrice}`,
+      newValue: created,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
   // Handle Partial Exit
@@ -241,6 +336,7 @@ export default function App() {
     );
     if (!targetTrade) return;
 
+    let updated: Trade | null = null;
     try {
       const res = await fetch(`/api/trades/${targetTrade.id}/partial-exit`, {
         method: 'POST',
@@ -249,24 +345,55 @@ export default function App() {
       });
 
       if (res.ok) {
-        const updated = await res.json();
-        setTrades((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-
-        const auditEntry: AuditLogEntry = {
-          id: `AUD-${Date.now().toString(36).toUpperCase()}`,
-          timestamp: new Date().toISOString(),
-          user: 'psxtrader24@gmail.com',
-          action: 'EXECUTE_PARTIAL_EXIT',
-          entity: 'POSITION',
-          entityId: targetTrade.id,
-          summary: `Partial exit of ${data.quantity} ${targetTrade.symbol} @ Rs ${data.exitPrice}`,
-          newValue: updated,
-        };
-        setAuditLogs((prev) => [auditEntry, ...prev]);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          updated = await res.json();
+        }
       }
-    } catch (err) {
-      console.error('Failed to execute partial exit:', err);
+    } catch {
+      // Backend unavailable
     }
+
+    if (!updated) {
+      const portionCost = data.quantity * targetTrade.entryPrice;
+      const grossProceeds = data.quantity * data.exitPrice;
+      const grossPnL = grossProceeds - portionCost;
+      const netPnL = grossPnL - data.fees;
+      const newExit = {
+        id: `PEX-${Date.now().toString(36).toUpperCase()}`,
+        date: data.exitDate,
+        quantity: data.quantity,
+        price: data.exitPrice,
+        fees: data.fees,
+        netPnL,
+        exitReason: data.exitReason,
+      };
+      const currentRemaining = targetTrade.remainingQuantity !== undefined ? targetTrade.remainingQuantity : targetTrade.quantity;
+      const newRemaining = currentRemaining - data.quantity;
+      const newStatus = newRemaining <= 0 ? 'CLOSED' : 'PARTIAL';
+      updated = {
+        ...targetTrade,
+        remainingQuantity: Math.max(0, newRemaining),
+        status: newStatus,
+        partialExits: [...(targetTrade.partialExits || []), newExit],
+        exitDate: newStatus === 'CLOSED' ? data.exitDate : targetTrade.exitDate,
+        exitPrice: newStatus === 'CLOSED' ? data.exitPrice : targetTrade.exitPrice,
+      };
+    }
+
+    setTrades((prev) => prev.map((t) => (t.id === updated!.id ? updated! : t)));
+
+    const auditEntry: AuditLogEntry = {
+      id: `AUD-${Date.now().toString(36).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      user: 'psxtrader24@gmail.com',
+      action: 'EXECUTE_PARTIAL_EXIT',
+      entity: 'POSITION',
+      entityId: targetTrade.id,
+      summary: `Partial exit of ${data.quantity} ${targetTrade.symbol} @ Rs ${data.exitPrice}`,
+      newValue: updated,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
   // Handle Stop Loss edit
@@ -277,58 +404,53 @@ export default function App() {
     if (!trade) return;
 
     try {
-      const res = await fetch(`/api/trades/${trade.id}`, {
+      await fetch(`/api/trades/${trade.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stopLoss: newStop }),
       });
+    } catch {}
 
-      if (res.ok) {
-        const updated = await res.json();
-        setTrades((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setTrades((prev) =>
+      prev.map((t) => (t.id === trade.id ? { ...t, stopLoss: newStop } : t))
+    );
 
-        const auditEntry: AuditLogEntry = {
-          id: `AUD-${Date.now().toString(36).toUpperCase()}`,
-          timestamp: new Date().toISOString(),
-          user: 'psxtrader24@gmail.com',
-          action: 'UPDATE',
-          entity: 'TRADE',
-          entityId: trade.id,
-          summary: `Updated stop loss for ${trade.symbol} to Rs ${newStop}`,
-          previousValue: { stopLoss: trade.stopLoss },
-          newValue: { stopLoss: newStop },
-        };
-        setAuditLogs((prev) => [auditEntry, ...prev]);
-      }
-    } catch (err) {
-      console.error('Failed to update stop loss:', err);
-    }
+    const auditEntry: AuditLogEntry = {
+      id: `AUD-${Date.now().toString(36).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      user: 'psxtrader24@gmail.com',
+      action: 'UPDATE',
+      entity: 'TRADE',
+      entityId: trade.id,
+      summary: `Updated stop loss for ${trade.symbol} to Rs ${newStop}`,
+      previousValue: { stopLoss: trade.stopLoss },
+      newValue: { stopLoss: newStop },
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
   // Handle Delete Trade
   const handleDeleteTrade = async (id: string) => {
     try {
-      const res = await fetch(`/api/trades/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setTrades((prev) => prev.filter((t) => t.id !== id));
-        const auditEntry: AuditLogEntry = {
-          id: `AUD-${Date.now().toString(36).toUpperCase()}`,
-          timestamp: new Date().toISOString(),
-          user: 'psxtrader24@gmail.com',
-          action: 'DELETE',
-          entity: 'TRADE',
-          entityId: id,
-          summary: `Deleted trade ${id}`,
-        };
-        setAuditLogs((prev) => [auditEntry, ...prev]);
-      }
-    } catch (err) {
-      console.error('Failed to delete trade:', err);
-    }
+      await fetch(`/api/trades/${id}`, { method: 'DELETE' });
+    } catch {}
+
+    setTrades((prev) => prev.filter((t) => t.id !== id));
+    const auditEntry: AuditLogEntry = {
+      id: `AUD-${Date.now().toString(36).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      user: 'psxtrader24@gmail.com',
+      action: 'DELETE',
+      entity: 'TRADE',
+      entityId: id,
+      summary: `Deleted trade ${id}`,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
   // Handle Cash Transaction (Deposit / Withdrawal)
   const handleCreateCashTransaction = async (cashData: any) => {
+    let created: CashTransaction | null = null;
     try {
       const res = await fetch('/api/cash', {
         method: 'POST',
@@ -337,28 +459,39 @@ export default function App() {
       });
 
       if (res.ok) {
-        const created = await res.json();
-        setCashTransactions((prev) => [created, ...prev]);
-
-        const auditEntry: AuditLogEntry = {
-          id: `AUD-${Date.now().toString(36).toUpperCase()}`,
-          timestamp: new Date().toISOString(),
-          user: 'psxtrader24@gmail.com',
-          action: created.type,
-          entity: 'CASH',
-          entityId: created.id,
-          summary: `${created.type} of Rs ${created.amount.toLocaleString()} via ${created.method}`,
-          newValue: created,
-        };
-        setAuditLogs((prev) => [auditEntry, ...prev]);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          created = await res.json();
+        }
       }
-    } catch (err) {
-      console.error('Failed to record cash transaction:', err);
+    } catch {}
+
+    if (!created) {
+      created = {
+        ...cashData,
+        id: `CSH-${Date.now().toString(36).toUpperCase()}`,
+        timestamp: new Date().toISOString(),
+      };
     }
+
+    setCashTransactions((prev) => [created!, ...prev]);
+
+    const auditEntry: AuditLogEntry = {
+      id: `AUD-${Date.now().toString(36).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      user: 'psxtrader24@gmail.com',
+      action: created.type,
+      entity: 'CASH',
+      entityId: created.id,
+      summary: `${created.type} of Rs ${created.amount.toLocaleString()} via ${created.method}`,
+      newValue: created,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
   // Handle Save Journal
   const handleSaveJournal = async (journalData: any) => {
+    let saved: TradeJournalEntry | null = null;
     try {
       const res = await fetch('/api/journal', {
         method: 'POST',
@@ -367,48 +500,60 @@ export default function App() {
       });
 
       if (res.ok) {
-        const saved = await res.json();
-        setJournals((prev) => {
-          const idx = prev.findIndex((j) => j.id === saved.id);
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = saved;
-            return next;
-          }
-          return [saved, ...prev];
-        });
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          saved = await res.json();
+        }
       }
-    } catch (err) {
-      console.error('Failed to save journal:', err);
+    } catch {}
+
+    if (!saved) {
+      saved = {
+        ...journalData,
+        id: journalData.id || `JRN-${Date.now().toString(36).toUpperCase()}`,
+        date: journalData.date || new Date().toISOString().split('T')[0],
+      };
     }
+
+    setJournals((prev) => {
+      const idx = prev.findIndex((j) => j.id === saved!.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = saved!;
+        return next;
+      }
+      return [saved!, ...prev];
+    });
   };
 
   // Reset demo or clean slate
   const handleResetPortfolio = async (mode: 'DEMO' | 'CLEAN') => {
     try {
-      const res = await fetch('/api/portfolio/reset', {
+      await fetch('/api/portfolio/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode }),
       });
+    } catch {}
 
-      if (res.ok) {
-        if (mode === 'CLEAN') {
-          setOpeningCapital(1000000);
-          setCashTransactions([]);
-          setTrades([]);
-          setJournals([]);
-          setAuditLogs([]);
-        } else {
-          setOpeningCapital(INITIAL_OPENING_CAPITAL);
-          setCashTransactions([...INITIAL_CASH_TRANSACTIONS]);
-          setTrades([...INITIAL_TRADES]);
-          setJournals([...INITIAL_TRADE_JOURNALS]);
-          setAuditLogs([...INITIAL_AUDIT_LOG]);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to reset portfolio:', err);
+    if (mode === 'CLEAN') {
+      setOpeningCapital(1000000);
+      setCashTransactions([]);
+      setTrades([]);
+      setJournals([]);
+      setAuditLogs([]);
+      try {
+        localStorage.clear();
+      } catch {}
+    } else {
+      setOpeningCapital(INITIAL_OPENING_CAPITAL);
+      setCashTransactions([...INITIAL_CASH_TRANSACTIONS]);
+      setTrades([...INITIAL_TRADES]);
+      setJournals([...INITIAL_TRADE_JOURNALS]);
+      setAuditLogs([...INITIAL_AUDIT_LOG]);
+      try {
+        localStorage.clear();
+      } catch {}
     }
   };
 

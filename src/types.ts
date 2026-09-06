@@ -18,12 +18,15 @@ export interface PSXQuote {
   turnover: number; // PKR
   lastUpdated: string;
   dataBasis: DataBasisType;
+  pe?: number;
+  dividendYield?: number;
 }
 
 export interface PSXIndex {
   symbol: string;
   name: string;
   value: number;
+  currentValue?: number;
   change: number;
   changePercent: number;
   high: number;
@@ -42,6 +45,7 @@ export interface Trade {
   entryTime: string; // HH:mm
   entryPrice: number;
   quantity: number;
+  remainingQuantity?: number;
   positionSize: number; // entryPrice * quantity
   fees: number; // Brokerage, CDC, SECP, taxes
   taxes: number; // SST / CVT / Capital Gains Tax
@@ -103,6 +107,7 @@ export interface OpenPosition {
 
 export interface ClosedPosition {
   id: string;
+  tradeId: string;
   symbol: string;
   companyName: string;
   sector: string;
@@ -114,10 +119,12 @@ export interface ClosedPosition {
   grossPnL: number;
   fees: number;
   taxes: number;
+  feesAndTaxes: number;
   netPnL: number;
   returnPercent: number;
   holdingPeriodDays: number;
   winLoss: WinLossStatus;
+  isWin: boolean;
   strategy: string;
   exitReason: string;
   stopLoss?: number;
